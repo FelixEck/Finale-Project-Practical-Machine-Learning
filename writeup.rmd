@@ -1,0 +1,106 @@
+---
+title: "Practical Machine Learning"
+author: "Felix"
+date: "Monday, January 18, 2016"
+output: html_document
+---
+
+For the course project I start by loading in the test and the training set as given for the final project. To avoid confusion later I name them 'trainingOriginal' and 'testOriginal'. 
+
+```{r}
+
+setwd("C:/Users/felix.hoschle/Documents/R/coursera/project")
+trainingOriginal<-read.csv("pml-training.csv", header = TRUE, sep = ",", quote = "\"",
+                           dec = ".", fill = TRUE, comment.char = "")
+
+testOriginal<-read.csv("pml-testing.csv", header = TRUE, sep = ",", quote = "\"",
+                       dec = ".", fill = TRUE, comment.char = "")
+```
+To be able to estimate the out of sample error I divide the original training set into a new training and a new testing set.
+As a result I have 4 different data sets, were the sets 'training' and 'testing' together are equal to the set 'trainingOriginal'.
+```{r}
+library(caret)
+
+inTrain = createDataPartition(trainingOriginal$classe, p = 0.6,list=FALSE)
+training=trainingOriginal[inTrain,]
+testing=trainingOriginal[-inTrain,]
+```
+
+Before I can fit my model I need to decide which of the columns I will use as predictors. My approach is to split the training data set by the variable 'classe'. Then I compare the density of each possible predictor depending on 'classe'. 
+
+Below is an example in which I create a density plot for the variable 'roll_belt'.  
+
+
+```{r}
+TrainingA<-training[training$classe=='A',]
+TrainingB<-training[training$classe=='B',]
+TrainingC<-training[training$classe=='C',]
+TrainingD<-training[training$classe=='D',]
+TrainingE<-training[training$classe=='E',]
+
+
+a<-density(as.numeric(TrainingA$roll_belt))
+b<-density(as.numeric(TrainingB$roll_belt))
+c<-density(as.numeric(TrainingC$roll_belt))
+d<-density(as.numeric(TrainingD$roll_belt))
+e<-density(as.numeric(TrainingE$roll_belt))
+
+
+plot (a)
+lines (b)
+lines(c)
+lines(d)
+lines(e)
+polygon(b, border="red")
+polygon(c, border="blue")
+polygon(d, border="green")
+polygon(e, border="yellow")
+```
+
+The plot shows that the density of 'roll_belt' differs depending on weather 'classe' takes the value 'A','B','C','D' or 'E'.
+I repeat this procedure for all possible predictors. I keep only the columns that show different densities depending on 'classe'. I use all the remaining columns as predictors.
+Following that I fit my model using 'random forest' as method.
+
+I tried different models but got the best results in terms of accuracy for the newly created test set when using random forest. 
+
+To maximize the accuracy of my model I decided to employ a k-fold _cross validation_ mechanism. To do so I use the trainControl function and create 5 folds and make the procedure repeat itself 5 times.
+  
+    
+```{r}
+ForCrossValidation<-trainControl(
+  method = "repeatedcv",
+  number = 5,
+  repeats = 5)
+```
+
+
+I now fit my model. I use all the predictors I preselected. As specified in the task I use 'classe' as the variable for which the value needs to be predicted. I pass the object 'ForCrossValidation' which I just created as the parameter for 'trControl'. 
+I fit two different models. The difference is that I fit the first model (model) using the entire data set given for the task (trainingOriginal). The second time I only use the training data set which I created my self. This will enable me to estimate the out of sample error (model2).
+
+```{r}
+model<-train(classe~roll_belt+gyros_belt_x+accel_belt_x+magnet_belt_x+roll_arm+total_accel_arm+gyros_arm_x+accel_arm_x+roll_dumbbell,method="rf",trControl=ForCrossValidation,data=trainingOriginal)
+
+model2<-train(classe~roll_belt+gyros_belt_x+accel_belt_x+magnet_belt_x+roll_arm+total_accel_arm+gyros_arm_x+accel_arm_x+roll_dumbbell,method="rf",trControl=ForCrossValidation,data=training)
+```
+
+After this I identify the the out-of-sample error by predicting classe for the 'testing' data set which I have created by splitting the orignal training set.
+
+The accuracy just as well as the sensitivities and specificities for all the different classes are at a high level. The out of sample error is very low.
+
+```{r}
+pred<-predict(model2,testing)
+confusionMatrix(pred,testing$classe)
+
+Out_of_Sample_Error <- 1-(sum(pred == testing$classe)/length(testing$classe))
+print(Out_of_Sample_Error)
+```
+
+As a final step i use the fitted model 'model' to make a prediction for the 20 lines of data that were given for this purpose. I use 'model' instead of 'model2' because it was trained on the entire set 'trainingOriginal' This makes sense because we only care about the test set that was provided without values for 'classe' (testingOriginal).So using the complete provided training date (trainingOriginal) improves the perfomance of the model. My predictions are then stored in the object 'predResult'.
+
+```{r}
+predResult<-predict(model,testOriginal)
+```
+
+
+Thank you for you time!
+
